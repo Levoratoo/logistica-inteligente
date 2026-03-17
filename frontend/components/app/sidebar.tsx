@@ -11,6 +11,7 @@ import {
   Crosshair,
   LayoutPanelTop,
   Map,
+  Presentation,
   Radar,
   ShipWheel,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const companyNavigation = [
   { href: "/containers", label: "Conteineres", icon: Container },
   { href: "/ships", label: "Navios", icon: ShipWheel },
   { href: "/carriers", label: "Transportadoras", icon: Building2 },
+  { href: "/reports", label: "Relatorios", icon: Presentation },
   { href: "/tracking", label: "Rastreamento", icon: Radar },
   { href: "/simulation", label: "Simulation Center", icon: Boxes },
 ];
