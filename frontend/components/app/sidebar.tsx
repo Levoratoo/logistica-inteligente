@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AlertTriangle,
   BarChart3,
   Boxes,
   Building2,
@@ -14,7 +15,8 @@ import { cn } from "@/lib/utils";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { href: "/containers", label: "Contêineres", icon: Container },
+  { href: "/occurrences", label: "Ocorrencias", icon: AlertTriangle },
+  { href: "/containers", label: "Conteineres", icon: Container },
   { href: "/ships", label: "Navios", icon: ShipWheel },
   { href: "/carriers", label: "Transportadoras", icon: Building2 },
   { href: "/tracking", label: "Rastreamento", icon: Radar },
@@ -37,7 +39,8 @@ export function Sidebar() {
           </div>
         </div>
         <div className="rounded-3xl border border-white/10 bg-white/6 p-4 text-sm leading-6 text-white/75">
-          Operação ponta a ponta para pátio portuário, fiscalização, transporte e entrega final.
+          Operacao ponta a ponta para patio portuario, fiscalizacao, transporte,
+          ocorrencias e entrega final.
         </div>
       </div>
 
@@ -65,7 +68,7 @@ export function Sidebar() {
       <div className="mt-auto rounded-3xl border border-accent/20 bg-accent/12 p-4 text-sm text-white/80">
         <p className="font-semibold text-white">Ambiente demonstrativo</p>
         <p className="mt-1 text-white/70">
-          Dados mockados com fluxo operacional realista para apresentação a recrutadores.
+          Dados mockados com fluxo operacional autonomo e compativel com GitHub Pages.
         </p>
       </div>
     </aside>

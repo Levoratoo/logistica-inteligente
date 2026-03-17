@@ -72,7 +72,10 @@ export default function SimulationPage() {
     queryClient.invalidateQueries({ queryKey: ["simulation-ships"] });
     queryClient.invalidateQueries({ queryKey: ["simulation-containers"] });
     queryClient.invalidateQueries({ queryKey: ["containers"] });
+    queryClient.invalidateQueries({ queryKey: ["occurrences"] });
+    queryClient.invalidateQueries({ queryKey: ["occurrences-summary"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-overview-occurrences"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard-overview-topbar"] });
     queryClient.invalidateQueries({ queryKey: ["tracking"] });
   }

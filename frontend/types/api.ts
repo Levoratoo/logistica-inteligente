@@ -14,6 +14,15 @@ export type ShipStatus =
   | "PARTIU"
   | "ATRASADO";
 export type CarrierStatus = "DISPONIVEL" | "EM_OPERACAO" | "INATIVA";
+export type OccurrenceSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type OccurrenceStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED";
+export type OccurrenceCategory =
+  | "SHIP_DELAY"
+  | "CUSTOMS_HOLD"
+  | "YARD_CONGESTION"
+  | "TRANSPORT_DELAY"
+  | "DOCUMENT_REVIEW";
+export type OccurrenceSourceType = "CONTAINER" | "SHIP" | "SYSTEM";
 export type EventType =
   | "NAVIO_PREVISTO"
   | "NAVIO_CHEGOU"
@@ -84,6 +93,27 @@ export type EventLog = {
   container?: Pick<Container, "id" | "containerCode" | "status" | "clientName">;
 };
 
+export type OperationalOccurrence = {
+  id: string;
+  title: string;
+  description: string;
+  category: OccurrenceCategory;
+  severity: OccurrenceSeverity;
+  status: OccurrenceStatus;
+  sourceType: OccurrenceSourceType;
+  sourceId?: string | null;
+  sourceLabel: string;
+  ownerName?: string | null;
+  slaDeadlineAt?: string | null;
+  recommendedAction: string;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string | null;
+  container?: Pick<Container, "id" | "containerCode" | "status" | "clientName">;
+  ship?: Pick<Ship, "id" | "name" | "status" | "company">;
+};
+
 export type Container = {
   id: string;
   containerCode: string;
@@ -121,6 +151,8 @@ export type DashboardOverview = {
     awaitingClearance: number;
     expectedShips: number;
     averageDeliveryTimeHours: number;
+    openOccurrences: number;
+    criticalOccurrences: number;
   };
   statusDistribution: Array<{
     status: ContainerStatus;
@@ -140,6 +172,11 @@ export type DashboardOverview = {
   upcomingShips: Ship[];
   delayedContainers: Container[];
   recentEvents: EventLog[];
+  recentOccurrences: OperationalOccurrence[];
+  occurrenceBySeverity: Array<{
+    severity: OccurrenceSeverity;
+    total: number;
+  }>;
 };
 
 export type ContainerPayload = {

@@ -3,6 +3,9 @@ import type {
   ContainerStatus,
   ContainerType,
   EventType,
+  OccurrenceCategory,
+  OccurrenceSeverity,
+  OccurrenceStatus,
   ShipStatus,
 } from "@/types/api";
 
@@ -59,6 +62,45 @@ export function formatStatusLabel(
     | ContainerType,
 ) {
   return statusLabels[value] ?? value;
+}
+
+export function formatOccurrenceSeverity(
+  value: OccurrenceSeverity,
+) {
+  const labels: Record<OccurrenceSeverity, string> = {
+    LOW: "Baixa",
+    MEDIUM: "Media",
+    HIGH: "Alta",
+    CRITICAL: "Critica",
+  };
+
+  return labels[value] ?? value;
+}
+
+export function formatOccurrenceStatus(
+  value: OccurrenceStatus,
+) {
+  const labels: Record<OccurrenceStatus, string> = {
+    OPEN: "Aberta",
+    IN_PROGRESS: "Em tratamento",
+    RESOLVED: "Resolvida",
+  };
+
+  return labels[value] ?? value;
+}
+
+export function formatOccurrenceCategory(
+  value: OccurrenceCategory,
+) {
+  const labels: Record<OccurrenceCategory, string> = {
+    SHIP_DELAY: "Atraso de navio",
+    CUSTOMS_HOLD: "Retencao aduaneira",
+    YARD_CONGESTION: "Congestionamento de patio",
+    TRANSPORT_DELAY: "Atraso de transporte",
+    DOCUMENT_REVIEW: "Pendencia documental",
+  };
+
+  return labels[value] ?? value;
 }
 
 export function toDateTimeLocalValue(value?: string | null) {

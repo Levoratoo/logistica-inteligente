@@ -7,6 +7,11 @@ import type {
   DashboardOverview,
   EventLog,
   EventType,
+  OperationalOccurrence,
+  OccurrenceCategory,
+  OccurrenceSeverity,
+  OccurrenceSourceType,
+  OccurrenceStatus,
   PaginatedResponse,
   Ship,
   ShipPayload,
@@ -37,6 +42,7 @@ type ContainerRecord = Omit<Container, "ship" | "carrier" | "events"> & {
 };
 
 type EventRecord = Omit<EventLog, "container">;
+type OccurrenceRecord = Omit<OperationalOccurrence, "container" | "ship">;
 
 type DemoState = {
   version: number;
@@ -51,6 +57,7 @@ type DemoState = {
   carriers: CarrierRecord[];
   containers: ContainerRecord[];
   events: EventRecord[];
+  occurrences: OccurrenceRecord[];
 };
 
 export type SimulationRuntimeState = {
@@ -93,12 +100,13 @@ export const DEMO_SPEED_LABELS: Record<DemoSpeed, string> = {
   2: "2x Rápido",
 };
 
-const STORAGE_KEY = "portflow-demo-state-v2";
-const STATE_VERSION = 2;
+const STORAGE_KEY = "portflow-demo-state-v3";
+const STATE_VERSION = 3;
 const MINUTE_MS = 60_000;
 const CYCLE_MINUTES = 30;
 const MAX_EVENTS = 360;
 const MAX_CONTAINERS = 42;
+const MAX_OCCURRENCES = 140;
 const MIN_FUTURE_SHIPS = 3;
 
 const scenarioProfiles = {
@@ -365,6 +373,38 @@ function toEventReference(state: DemoState, event: EventRecord): EventLog {
           containerCode: container.containerCode,
           status: container.status,
           clientName: container.clientName,
+        }
+      : undefined,
+  };
+}
+
+function toOccurrenceReference(
+  state: DemoState,
+  occurrence: OccurrenceRecord,
+): OperationalOccurrence {
+  const container = occurrence.sourceType === "CONTAINER"
+    ? state.containers.find((item) => item.id === occurrence.sourceId)
+    : null;
+  const ship = occurrence.sourceType === "SHIP"
+    ? state.ships.find((item) => item.id === occurrence.sourceId)
+    : null;
+
+  return {
+    ...occurrence,
+    container: container
+      ? {
+          id: container.id,
+          containerCode: container.containerCode,
+          status: container.status,
+          clientName: container.clientName,
+        }
+      : undefined,
+    ship: ship
+      ? {
+          id: ship.id,
+          name: ship.name,
+          status: ship.status,
+          company: ship.company,
         }
       : undefined,
   };
@@ -1022,6 +1062,7 @@ function buildInitialState() {
     carriers,
     containers,
     events: [],
+    occurrences: [],
   };
 
   for (const container of state.containers) {
@@ -1034,6 +1075,7 @@ function buildInitialState() {
 }
 
 function persistState(state: DemoState) {
+  syncOperationalOccurrences(state);
   state.lastEngineAt = new Date().toISOString();
 
   if (!isBrowser()) {
@@ -1158,10 +1200,209 @@ function findCarrierRecord(state: DemoState, carrierId: string) {
   return carrier;
 }
 
+function findOccurrenceRecord(state: DemoState, occurrenceId: string) {
+  const occurrence = state.occurrences.find((item) => item.id === occurrenceId);
+
+  if (!occurrence) {
+    throw new Error("Ocorrencia nao encontrada.");
+  }
+
+  return occurrence;
+}
+
 function listAllContainers(state: DemoState) {
   return state.containers
     .map((item) => toContainerReference(state, item))
     .sort((left, right) => compareDesc(left.updatedAt, right.updatedAt));
+}
+
+function listAllOccurrences(state: DemoState) {
+  return state.occurrences
+    .map((item) => toOccurrenceReference(state, item))
+    .sort((left, right) => compareDesc(left.updatedAt, right.updatedAt));
+}
+
+function buildOccurrenceId(
+  sourceType: OccurrenceSourceType,
+  category: OccurrenceCategory,
+  sourceId: string,
+) {
+  return `occ-${sourceType.toLowerCase()}-${category.toLowerCase()}-${sourceId}`;
+}
+
+function resolveOccurrenceRecord(
+  state: DemoState,
+  occurrence: OccurrenceRecord,
+  note?: string,
+) {
+  occurrence.status = "RESOLVED";
+  occurrence.updatedAt = state.currentTime;
+  occurrence.resolvedAt = state.currentTime;
+  occurrence.notes = note ?? occurrence.notes ?? "Ocorrencia normalizada pela operacao.";
+}
+
+function upsertOccurrenceRecord(
+  state: DemoState,
+  payload: Omit<OccurrenceRecord, "createdAt" | "updatedAt" | "resolvedAt" | "status"> & {
+    status?: OccurrenceStatus;
+  },
+) {
+  const existing = state.occurrences.find((item) => item.id === payload.id);
+
+  if (!existing) {
+    state.occurrences.unshift({
+      ...payload,
+      status: payload.status ?? "OPEN",
+      createdAt: state.currentTime,
+      updatedAt: state.currentTime,
+      resolvedAt: null,
+    });
+    return;
+  }
+
+  existing.title = payload.title;
+  existing.description = payload.description;
+  existing.category = payload.category;
+  existing.severity = payload.severity;
+  existing.sourceType = payload.sourceType;
+  existing.sourceId = payload.sourceId;
+  existing.sourceLabel = payload.sourceLabel;
+  existing.slaDeadlineAt = payload.slaDeadlineAt;
+  existing.recommendedAction = payload.recommendedAction;
+  existing.updatedAt = state.currentTime;
+
+  if (existing.status === "RESOLVED") {
+    existing.status = payload.status ?? "OPEN";
+    existing.resolvedAt = null;
+  }
+}
+
+function syncOperationalOccurrences(state: DemoState) {
+  const desiredIds = new Set<string>();
+
+  for (const ship of state.ships.filter((item) => item.status === "ATRASADO")) {
+    const severity: OccurrenceSeverity =
+      new Date(ship.eta).getTime() < new Date(state.currentTime).getTime() - 4 * 60 * MINUTE_MS
+        ? "CRITICAL"
+        : "HIGH";
+    const id = buildOccurrenceId("SHIP", "SHIP_DELAY", ship.id);
+
+    desiredIds.add(id);
+    upsertOccurrenceRecord(state, {
+      id,
+      title: `Atraso de escala: ${ship.name}`,
+      description: `Navio ${ship.name} segue atrasado na rota ${ship.origin} -> ${ship.destination}.`,
+      category: "SHIP_DELAY",
+      severity,
+      sourceType: "SHIP",
+      sourceId: ship.id,
+      sourceLabel: ship.name,
+      slaDeadlineAt: addHours(state.currentTime, severity === "CRITICAL" ? 1 : 2),
+      recommendedAction: "Replanejar janela de atracacao e comunicar clientes impactados.",
+      ownerName: state.occurrences.find((item) => item.id === id)?.ownerName ?? null,
+      notes: state.occurrences.find((item) => item.id === id)?.notes ?? null,
+    });
+  }
+
+  for (const container of state.containers.filter((item) => item.status === "ATRASADO")) {
+    let category: OccurrenceCategory = "TRANSPORT_DELAY";
+    let severity: OccurrenceSeverity = "HIGH";
+    let title = `Interrupcao operacional: ${container.containerCode}`;
+    const description = container.notes ?? "Ocorrencia operacional ativa.";
+    let recommendedAction = "Revisar plano de contingencia e reprogramar proxima etapa.";
+
+    if (container.automation.delayStage === "SHIP_ARRIVAL") {
+      category = "SHIP_DELAY";
+      severity = "HIGH";
+      title = `Carga sem atracacao: ${container.containerCode}`;
+      recommendedAction = "Acompanhar escala vinculada e revisar janela de pátio.";
+    } else if (container.automation.delayStage === "CUSTOMS") {
+      category = "CUSTOMS_HOLD";
+      severity = "CRITICAL";
+      title = `Retencao aduaneira: ${container.containerCode}`;
+      recommendedAction = "Priorizar conferencia documental e contato com o despachante.";
+    } else if (container.automation.delayStage === "DISPATCH") {
+      category = "YARD_CONGESTION";
+      severity = "MEDIUM";
+      title = `Fila de retirada: ${container.containerCode}`;
+      recommendedAction = "Redistribuir docas e liberar janela para expedicao.";
+    } else if (container.automation.delayStage === "DELIVERY") {
+      category = "TRANSPORT_DELAY";
+      severity = "HIGH";
+      title = `Entrega fora de janela: ${container.containerCode}`;
+      recommendedAction = "Replanejar rota e alinhar novo ETA com o destinatario.";
+    }
+
+    const id = buildOccurrenceId("CONTAINER", category, container.id);
+    desiredIds.add(id);
+    upsertOccurrenceRecord(state, {
+      id,
+      title,
+      description,
+      category,
+      severity,
+      sourceType: "CONTAINER",
+      sourceId: container.id,
+      sourceLabel: container.containerCode,
+      slaDeadlineAt: addHours(
+        state.currentTime,
+        severity === "CRITICAL" ? 1 : severity === "HIGH" ? 2 : 4,
+      ),
+      recommendedAction,
+      ownerName: state.occurrences.find((item) => item.id === id)?.ownerName ?? null,
+      notes: state.occurrences.find((item) => item.id === id)?.notes ?? null,
+    });
+  }
+
+  const containersInPort = state.containers.filter((item) =>
+    ["NO_PORTO", "EM_FISCALIZACAO", "LIBERADO"].includes(item.status),
+  ).length;
+  if (containersInPort >= 6) {
+    const id = buildOccurrenceId("SYSTEM", "YARD_CONGESTION", "terminal-santos");
+    desiredIds.add(id);
+    upsertOccurrenceRecord(state, {
+      id,
+      title: "Congestionamento de patio",
+      description: `${containersInPort} unidades aguardam liberacao ou retirada no terminal.`,
+      category: "YARD_CONGESTION",
+      severity: containersInPort >= 9 ? "CRITICAL" : "HIGH",
+      sourceType: "SYSTEM",
+      sourceId: "terminal-santos",
+      sourceLabel: "Terminal Santos",
+      slaDeadlineAt: addHours(state.currentTime, 2),
+      recommendedAction: "Redistribuir fluxo de descarga e ampliar janelas de retirada.",
+      ownerName: state.occurrences.find((item) => item.id === id)?.ownerName ?? null,
+      notes: state.occurrences.find((item) => item.id === id)?.notes ?? null,
+    });
+  }
+
+  const inspectionQueue = state.containers.filter(
+    (item) => item.status === "EM_FISCALIZACAO",
+  ).length;
+  if (inspectionQueue >= 3) {
+    const id = buildOccurrenceId("SYSTEM", "DOCUMENT_REVIEW", "aduana-santos");
+    desiredIds.add(id);
+    upsertOccurrenceRecord(state, {
+      id,
+      title: "Pendencias documentais acumuladas",
+      description: `${inspectionQueue} unidades permanecem na fila aduaneira acima da media operacional.`,
+      category: "DOCUMENT_REVIEW",
+      severity: inspectionQueue >= 5 ? "CRITICAL" : "MEDIUM",
+      sourceType: "SYSTEM",
+      sourceId: "aduana-santos",
+      sourceLabel: "Canal aduaneiro",
+      slaDeadlineAt: addHours(state.currentTime, 3),
+      recommendedAction: "Auditar pendencias documentais e acelerar contato com despachantes.",
+      ownerName: state.occurrences.find((item) => item.id === id)?.ownerName ?? null,
+      notes: state.occurrences.find((item) => item.id === id)?.notes ?? null,
+    });
+  }
+
+  for (const occurrence of state.occurrences) {
+    if (!desiredIds.has(occurrence.id) && occurrence.status !== "RESOLVED") {
+      resolveOccurrenceRecord(state, occurrence, "Ocorrencia encerrada automaticamente apos normalizacao do fluxo.");
+    }
+  }
 }
 
 function applyShipArrival(state: DemoState, ship: ShipRecord) {
@@ -1537,6 +1778,17 @@ function pruneState(state: DemoState) {
 
     state.containers = state.containers.filter((container) => container.id !== next.id);
     state.events = state.events.filter((event) => event.containerId !== next.id);
+  }
+
+  if (state.occurrences.length > MAX_OCCURRENCES) {
+    const preserved = state.occurrences
+      .filter((occurrence) => occurrence.status !== "RESOLVED")
+      .sort((left, right) => compareDesc(left.updatedAt, right.updatedAt));
+    const resolved = state.occurrences
+      .filter((occurrence) => occurrence.status === "RESOLVED")
+      .sort((left, right) => compareDesc(left.updatedAt, right.updatedAt));
+
+    state.occurrences = [...preserved, ...resolved].slice(0, MAX_OCCURRENCES);
   }
 }
 
@@ -2118,6 +2370,93 @@ export function getDemoContainerEvents(containerId: string) {
     .map((event) => toEventReference(state, event));
 }
 
+export function listDemoOccurrences(filters: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  status?: string;
+  severity?: string;
+  category?: string;
+}) {
+  const state = readState();
+  const search = normalizeSearch(filters.search);
+  const items = listAllOccurrences(state).filter((occurrence) => {
+    if (search) {
+      const haystack = [
+        occurrence.title,
+        occurrence.description,
+        occurrence.sourceLabel,
+        occurrence.ownerName ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      if (!haystack.includes(search)) {
+        return false;
+      }
+    }
+
+    if (filters.status && occurrence.status !== filters.status) {
+      return false;
+    }
+
+    if (filters.severity && occurrence.severity !== filters.severity) {
+      return false;
+    }
+
+    if (filters.category && occurrence.category !== filters.category) {
+      return false;
+    }
+
+    return true;
+  });
+
+  return paginate(items, filters.page, filters.pageSize);
+}
+
+export function getDemoOccurrence(occurrenceId: string) {
+  const state = readState();
+  return toOccurrenceReference(state, findOccurrenceRecord(state, occurrenceId));
+}
+
+export function assignDemoOccurrence(occurrenceId: string, ownerName: string) {
+  return updateState((state) => {
+    const occurrence = findOccurrenceRecord(state, occurrenceId);
+    occurrence.ownerName = ownerName;
+    occurrence.updatedAt = state.currentTime;
+
+    if (occurrence.status === "OPEN") {
+      occurrence.status = "IN_PROGRESS";
+    }
+
+    return toOccurrenceReference(state, occurrence);
+  });
+}
+
+export function updateDemoOccurrenceStatus(
+  occurrenceId: string,
+  status: OccurrenceStatus,
+  note?: string,
+) {
+  return updateState((state) => {
+    const occurrence = findOccurrenceRecord(state, occurrenceId);
+    occurrence.status = status;
+    occurrence.updatedAt = state.currentTime;
+
+    if (status === "RESOLVED") {
+      occurrence.resolvedAt = state.currentTime;
+    } else {
+      occurrence.resolvedAt = null;
+    }
+
+    if (note) {
+      occurrence.notes = note;
+    }
+
+    return toOccurrenceReference(state, occurrence);
+  });
+}
+
 export function simulateDemoShipArrival(shipId: string) {
   return updateState((state) => {
     const ship = findShipRecord(state, shipId);
@@ -2163,6 +2502,7 @@ export function simulateDemoDelivery(containerId: string) {
 export function getDemoDashboardOverview(): DashboardOverview {
   const state = readState();
   const containers = listAllContainers(state);
+  const occurrences = listAllOccurrences(state);
   const recentEvents = state.events
     .sort((left, right) => compareDesc(left.occurredAt, right.occurredAt))
     .slice(0, 6)
@@ -2220,6 +2560,10 @@ export function getDemoDashboardOverview(): DashboardOverview {
     .sort((left, right) => right.totalContainers - left.totalContainers);
 
   const deliveredContainers = containers.filter((container) => container.status === "ENTREGUE");
+  const openOccurrences = occurrences.filter((occurrence) => occurrence.status !== "RESOLVED");
+  const criticalOccurrences = openOccurrences.filter(
+    (occurrence) => occurrence.severity === "CRITICAL",
+  );
   const averageDeliveryTimeHours =
     deliveredContainers.length > 0
       ? Math.round(
@@ -2245,6 +2589,8 @@ export function getDemoDashboardOverview(): DashboardOverview {
         ["PREVISTO", "ATRASADO"].includes(ship.status),
       ).length,
       averageDeliveryTimeHours,
+      openOccurrences: openOccurrences.length,
+      criticalOccurrences: criticalOccurrences.length,
     },
     statusDistribution: (
       [
@@ -2282,5 +2628,12 @@ export function getDemoDashboardOverview(): DashboardOverview {
       .sort((left, right) => compareDesc(left.updatedAt, right.updatedAt))
       .slice(0, 4),
     recentEvents,
+    recentOccurrences: occurrences.slice(0, 6),
+    occurrenceBySeverity: (
+      ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as OccurrenceSeverity[]
+    ).map((severity) => ({
+      severity,
+      total: openOccurrences.filter((occurrence) => occurrence.severity === severity).length,
+    })),
   };
 }

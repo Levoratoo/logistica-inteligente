@@ -16,6 +16,7 @@ O sistema simula o fluxo operacional de importacao:
 
 - Dashboard logistico com KPIs, graficos e alertas operacionais
 - CRUD completo de conteineres, navios e transportadoras
+- Central de ocorrencias operacionais com triagem e resolucao
 - Timeline por conteiner e tracking por codigo
 - Simulation Center com automacao continua
 - Demo autonoma no frontend com persistencia em `localStorage`

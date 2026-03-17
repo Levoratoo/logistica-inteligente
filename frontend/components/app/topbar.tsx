@@ -28,14 +28,14 @@ export function Topbar() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
         <div className="flex items-center gap-3 rounded-2xl bg-secondary/60 px-4 py-3 text-sm text-muted-foreground">
           <Waves className="size-4 text-primary" />
-          Operação de Santos em monitoramento autônomo
+          Operacao de Santos em monitoramento autonomo
         </div>
         <div className="grid gap-1">
-          <p className="font-display text-xl font-semibold">Boa operação, {user?.name}</p>
+          <p className="font-display text-xl font-semibold">Boa operacao, {user?.name}</p>
           <p className="text-sm text-muted-foreground">
             {data
-              ? `${data.kpis.containersInPort} contêineres no porto, ${data.kpis.containersInTransport} em trânsito e ${data.kpis.expectedShips} navios previstos.`
-              : "Sincronizando indicadores da operação."}
+              ? `${data.kpis.containersInPort} conteineres no porto, ${data.kpis.containersInTransport} em transito e ${data.kpis.openOccurrences} ocorrencias abertas.`
+              : "Sincronizando indicadores da operacao."}
           </p>
         </div>
       </div>
@@ -51,9 +51,9 @@ export function Topbar() {
         ) : null}
         <div className="relative min-w-72">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-10" placeholder="Busca rápida por cliente, carga ou código" />
+          <Input className="pl-10" placeholder="Busca rapida por cliente, carga ou codigo" />
         </div>
-        <Button variant="ghost" size="icon" aria-label="Notificações">
+        <Button variant="ghost" size="icon" aria-label="Notificacoes">
           <Bell className="size-4" />
         </Button>
         <Button
