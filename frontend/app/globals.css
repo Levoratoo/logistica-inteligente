@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4efe7;
+  --foreground: #102a43;
+  --card: #ffffff;
+  --card-foreground: #102a43;
+  --popover: #ffffff;
+  --popover-foreground: #102a43;
+  --primary: #0b4f6c;
+  --primary-foreground: #f7fafc;
+  --secondary: #dfe8eb;
+  --secondary-foreground: #17324d;
+  --muted: #e6ecef;
+  --muted-foreground: #52606d;
+  --accent: #ee6c4d;
+  --accent-foreground: #fff7f3;
+  --border: #d4dde3;
+  --input: #eef3f5;
+  --ring: #0b4f6c;
+  --sidebar: #0b1f33;
+  --sidebar-foreground: #f4efe7;
+  --danger: #b42318;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-space-grotesk);
+  --font-display: var(--font-space-grotesk);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(238, 108, 77, 0.16), transparent 32%),
+    radial-gradient(circle at top right, rgba(11, 79, 108, 0.14), transparent 28%),
+    linear-gradient(180deg, #fcfbf8 0%, #f4efe7 45%, #eef3f5 100%);
+  color: var(--foreground);
+  font-family: var(--font-manrope), sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.soft-shadow {
+  box-shadow:
+    0 22px 54px -30px rgba(16, 42, 67, 0.45),
+    0 16px 24px -18px rgba(11, 79, 108, 0.22);
+}
+
+.grid-surface {
+  background-image:
+    linear-gradient(rgba(11, 79, 108, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 79, 108, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.page-fade {
+  animation: pageFade 0.55s ease-out;
+}
+
+@keyframes pageFade {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContainerType {
+  FT20
+  FT40
+}
+
+enum ContainerStatus {
+  AGUARDANDO_NAVIO
+  NO_PORTO
+  EM_FISCALIZACAO
+  LIBERADO
+  EM_TRANSPORTE
+  ENTREGUE
+  ATRASADO
+}
+
+enum ShipStatus {
+  PREVISTO
+  ATRACADO
+  DESCARREGANDO
+  PARTIU
+  ATRASADO
+}
+
+enum CarrierStatus {
+  DISPONIVEL
+  EM_OPERACAO
+  INATIVA
+}
+
+enum EventType {
+  NAVIO_PREVISTO
+  NAVIO_CHEGOU
+  CONTAINER_DESCARREGADO
+  EM_FISCALIZACAO
+  LIBERADO
+  SAIU_PARA_TRANSPORTE
+  ENTREGUE
+  STATUS_ATUALIZADO
+}
+
+model Ship {
+  id                 String      @id @default(cuid())
+  name               String
+  company            String
+  eta                DateTime
+  etd                DateTime?
+  actualArrivalAt    DateTime?
+  origin             String
+  destination        String
+  status             ShipStatus  @default(PREVISTO)
+  expectedContainers Int
+  containers         Container[]
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([status])
+  @@index([eta])
+}
+
+model Carrier {
+  id         String        @id @default(cuid())
+  name       String
+  cnpj       String        @unique
+  driverName String
+  truckPlate String
+  phone      String
+  email      String
+  status     CarrierStatus @default(DISPONIVEL)
+  containers Container[]
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([status])
+}
+
+model Container {
+  id                  String          @id @default(cuid())
+  containerCode       String          @unique
+  type                ContainerType
+  weight              Int
+  cargoDescription    String
+  clientName          String
+  origin              String
+  destination         String
+  status              ContainerStatus @default(AGUARDANDO_NAVIO)
+  shipId              String?
+  carrierId           String?
+  eta                 DateTime?
+  bookingDate         DateTime?
+  portEntryAt         DateTime?
+  unloadedAt          DateTime?
+  inspectionStartedAt DateTime?
+  customsReleasedAt   DateTime?
+  transportStartedAt  DateTime?
+  deliveredAt         DateTime?
+  sealNumber          String?
+  notes               String?
+  ship                Ship?           @relation(fields: [shipId], references: [id], onDelete: SetNull)
+  carrier             Carrier?        @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  events              EventLog[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([status])
+  @@index([shipId])
+  @@index([carrierId])
+  @@index([clientName])
+}
+
+model EventLog {
+  id          String    @id @default(cuid())
+  containerId String
+  type        EventType
+  title       String
+  description String
+  location    String?
+  metadata    Json?
+  occurredAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  container   Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
+
+  @@index([containerId, occurredAt])
+  @@index([type, occurredAt])
+}

@@ -1,0 +1,17 @@
+node_modules
+frontend/node_modules
+frontend/.next
+frontend/.git
+frontend/out
+backend/node_modules
+backend/dist
+backend/coverage
+.env
+frontend/.env
+backend/.env
+portflow-*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
