@@ -9,6 +9,7 @@ import {
   Building2,
   Container,
   Crosshair,
+  Map,
   Radar,
   ShipWheel,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/control-tower", label: "Torre de Controle", icon: Crosshair },
+  { href: "/yard-operations", label: "Patio e Docas", icon: Map },
   { href: "/occurrences", label: "Ocorrencias", icon: AlertTriangle },
   { href: "/containers", label: "Conteineres", icon: Container },
   { href: "/ships", label: "Navios", icon: ShipWheel },
@@ -70,7 +72,7 @@ export function Sidebar() {
       <div className="mt-auto rounded-3xl border border-accent/20 bg-accent/12 p-4 text-sm text-white/80">
         <p className="font-semibold text-white">Ambiente demonstrativo</p>
         <p className="mt-1 text-white/70">
-          Dados mockados com fluxo autonomo, torre de controle e compatibilidade com GitHub Pages.
+          Dados mockados com fluxo autonomo, patio vivo, torre de controle e compatibilidade com GitHub Pages.
         </p>
       </div>
     </aside>

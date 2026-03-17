@@ -16,6 +16,7 @@ O sistema simula o fluxo operacional de importacao:
 
 - Dashboard logistico com KPIs, graficos e alertas operacionais
 - Torre de controle operacional com fila de acao, SLAs e priorizacao do turno
+- Mapa de patio e programacao de docas com ocupacao por zona e berco
 - Workflow documental por conteiner com bloqueio operacional por etapa
 - CRUD completo de conteineres, navios e transportadoras
 - Central de ocorrencias operacionais com triagem e resolucao

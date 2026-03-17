@@ -48,6 +48,9 @@ export type ControlTowerActionType =
   | "DELIVERY"
   | "ADVANCE_CYCLE";
 export type ControlTowerTone = "STABLE" | "WATCH" | "CRITICAL";
+export type YardTone = "STABLE" | "WATCH" | "CRITICAL";
+export type YardSlotState = "OCCUPIED" | "RESERVED" | "BLOCKED" | "EMPTY";
+export type BerthStatus = "OPERATING" | "BOOKED" | "WATCH" | "FREE";
 export type EventType =
   | "NAVIO_PREVISTO"
   | "NAVIO_CHEGOU"
@@ -275,6 +278,65 @@ export type ControlTowerOverview = {
   };
   shipsApproaching: Ship[];
   containersNeedingAttention: Container[];
+};
+
+export type YardSlot = {
+  id: string;
+  state: YardSlotState;
+  label: string;
+  containerId?: string | null;
+  containerCode?: string | null;
+};
+
+export type YardZone = {
+  id: string;
+  code: string;
+  name: string;
+  capacity: number;
+  occupied: number;
+  reserved: number;
+  blocked: number;
+  free: number;
+  utilization: number;
+  tone: YardTone;
+  focusLabel: string;
+  containers: Array<Pick<Container, "id" | "containerCode" | "status" | "clientName">>;
+  slots: YardSlot[];
+};
+
+export type BerthWindow = {
+  id: string;
+  name: string;
+  status: BerthStatus;
+  tone: YardTone;
+  note: string;
+  startAt?: string | null;
+  endAt?: string | null;
+  ship?: Pick<Ship, "id" | "name" | "status" | "company" | "origin" | "destination" | "eta" | "etd"> | null;
+  nextShip?: Pick<Ship, "id" | "name" | "status" | "company" | "origin" | "destination" | "eta" | "etd"> | null;
+  load: number;
+};
+
+export type YardHotspot = {
+  id: string;
+  title: string;
+  description: string;
+  tone: YardTone;
+  routeHref: string;
+};
+
+export type YardOperationsOverview = {
+  currentTime: string;
+  occupancyRate: number;
+  occupiedSlots: number;
+  freeSlots: number;
+  reservedSlots: number;
+  blockedSlots: number;
+  activeBerths: number;
+  nextArrivals: number;
+  zones: YardZone[];
+  berthSchedule: BerthWindow[];
+  hotspots: YardHotspot[];
 };
 
 export type ContainerPayload = {
