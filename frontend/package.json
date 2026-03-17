@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack --hostname 0.0.0.0 --port 3015",
+    "dev:clean": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\" && npm run dev",
     "build": "next build",
     "build:static": "cross-env STATIC_EXPORT=true next build",
-    "start": "next start",
+    "start": "next start --hostname 0.0.0.0 --port 3015",
+    "serve:stable": "npm run build && npm run start",
     "lint": "eslint"
   },
   "dependencies": {
