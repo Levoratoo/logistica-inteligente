@@ -23,6 +23,13 @@ export type OccurrenceCategory =
   | "TRANSPORT_DELAY"
   | "DOCUMENT_REVIEW";
 export type OccurrenceSourceType = "CONTAINER" | "SHIP" | "SYSTEM";
+export type ControlTowerActionType =
+  | "SHIP_ARRIVAL"
+  | "CUSTOMS_RELEASE"
+  | "DISPATCH"
+  | "DELIVERY"
+  | "ADVANCE_CYCLE";
+export type ControlTowerTone = "STABLE" | "WATCH" | "CRITICAL";
 export type EventType =
   | "NAVIO_PREVISTO"
   | "NAVIO_CHEGOU"
@@ -177,6 +184,55 @@ export type DashboardOverview = {
     severity: OccurrenceSeverity;
     total: number;
   }>;
+};
+
+export type ControlTowerPriorityItem = {
+  id: string;
+  title: string;
+  description: string;
+  severity: OccurrenceSeverity;
+  occurrenceId?: string | null;
+  occurrenceStatus?: OccurrenceStatus | null;
+  dueAt?: string | null;
+  ownerName?: string | null;
+  sourceLabel: string;
+  actionType: ControlTowerActionType;
+  actionLabel: string;
+  targetId?: string | null;
+  routeHref: string;
+  category?: OccurrenceCategory | null;
+};
+
+export type ControlTowerLanePressure = {
+  id: string;
+  title: string;
+  total: number;
+  helper: string;
+  tone: ControlTowerTone;
+};
+
+export type ControlTowerOverview = {
+  currentTime: string;
+  scenarioLabel: string;
+  isRunning: boolean;
+  readinessScore: number;
+  pressureLabel: string;
+  primaryFocus: string;
+  kpis: {
+    actionQueue: number;
+    overdueSlas: number;
+    dueSoonSlas: number;
+    resolvedLast24h: number;
+  };
+  lanePressure: ControlTowerLanePressure[];
+  priorityQueue: ControlTowerPriorityItem[];
+  slaWatch: {
+    overdue: OperationalOccurrence[];
+    dueSoon: OperationalOccurrence[];
+    onTrack: OperationalOccurrence[];
+  };
+  shipsApproaching: Ship[];
+  containersNeedingAttention: Container[];
 };
 
 export type ContainerPayload = {
