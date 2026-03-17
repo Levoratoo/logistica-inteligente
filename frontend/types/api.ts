@@ -23,6 +23,24 @@ export type OccurrenceCategory =
   | "TRANSPORT_DELAY"
   | "DOCUMENT_REVIEW";
 export type OccurrenceSourceType = "CONTAINER" | "SHIP" | "SYSTEM";
+export type ContainerDocumentType =
+  | "BILL_OF_LADING"
+  | "COMMERCIAL_INVOICE"
+  | "PACKING_LIST"
+  | "IMPORT_DECLARATION"
+  | "CUSTOMS_CLEARANCE"
+  | "TRANSPORT_ORDER"
+  | "DELIVERY_APPOINTMENT"
+  | "PROOF_OF_DELIVERY";
+export type ContainerDocumentStatus =
+  | "MISSING"
+  | "PENDING_REVIEW"
+  | "APPROVED"
+  | "REJECTED";
+export type ContainerDocumentStage =
+  | "CUSTOMS_RELEASE"
+  | "DISPATCH"
+  | "DELIVERY";
 export type ControlTowerActionType =
   | "SHIP_ARRIVAL"
   | "CUSTOMS_RELEASE"
@@ -121,6 +139,28 @@ export type OperationalOccurrence = {
   ship?: Pick<Ship, "id" | "name" | "status" | "company">;
 };
 
+export type ContainerDocument = {
+  id: string;
+  type: ContainerDocumentType;
+  status: ContainerDocumentStatus;
+  requiredFor: ContainerDocumentStage[];
+  label: string;
+  updatedAt: string;
+  reviewedBy?: string | null;
+  notes?: string | null;
+};
+
+export type ContainerDocumentWorkflow = {
+  customsReady: boolean;
+  dispatchReady: boolean;
+  deliveryReady: boolean;
+  blockedStages: ContainerDocumentStage[];
+  missingDocuments: number;
+  pendingDocuments: number;
+  approvedDocuments: number;
+  blockingReason?: string | null;
+};
+
 export type Container = {
   id: string;
   containerCode: string;
@@ -145,6 +185,8 @@ export type Container = {
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+  documents?: ContainerDocument[];
+  documentWorkflow?: ContainerDocumentWorkflow;
   ship?: Ship | null;
   carrier?: Carrier | null;
   events?: EventLog[];

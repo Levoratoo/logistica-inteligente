@@ -1,5 +1,7 @@
 import type {
   CarrierStatus,
+  ContainerDocumentStatus,
+  ContainerDocumentType,
   ContainerStatus,
   ContainerType,
   EventType,
@@ -98,6 +100,32 @@ export function formatOccurrenceCategory(
     YARD_CONGESTION: "Congestionamento de patio",
     TRANSPORT_DELAY: "Atraso de transporte",
     DOCUMENT_REVIEW: "Pendencia documental",
+  };
+
+  return labels[value] ?? value;
+}
+
+export function formatDocumentType(value: ContainerDocumentType) {
+  const labels: Record<ContainerDocumentType, string> = {
+    BILL_OF_LADING: "Bill of lading",
+    COMMERCIAL_INVOICE: "Commercial invoice",
+    PACKING_LIST: "Packing list",
+    IMPORT_DECLARATION: "Declaracao de importacao",
+    CUSTOMS_CLEARANCE: "Comprovante de desembaraco",
+    TRANSPORT_ORDER: "Ordem de transporte",
+    DELIVERY_APPOINTMENT: "Janela de entrega",
+    PROOF_OF_DELIVERY: "Comprovante de entrega",
+  };
+
+  return labels[value] ?? value;
+}
+
+export function formatDocumentStatus(value: ContainerDocumentStatus) {
+  const labels: Record<ContainerDocumentStatus, string> = {
+    MISSING: "Ausente",
+    PENDING_REVIEW: "Em revisao",
+    APPROVED: "Aprovado",
+    REJECTED: "Rejeitado",
   };
 
   return labels[value] ?? value;

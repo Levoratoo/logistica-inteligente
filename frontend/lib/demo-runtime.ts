@@ -2,6 +2,10 @@ import type {
   Carrier,
   CarrierPayload,
   Container,
+  ContainerDocument,
+  ContainerDocumentStage,
+  ContainerDocumentStatus,
+  ContainerDocumentType,
   ContainerPayload,
   ContainerStatus,
   DashboardOverview,
@@ -22,6 +26,7 @@ export type DemoSpeed = 0.5 | 1 | 2;
 export type RuntimeSource = "LOCAL_BROWSER";
 
 type DelayStage = "SHIP_ARRIVAL" | "CUSTOMS" | "DISPATCH" | "DELIVERY";
+type DocumentGate = ContainerDocumentStage;
 
 type CarrierRecord = Omit<Carrier, "containers" | "_count">;
 
@@ -32,7 +37,7 @@ type ShipRecord = Omit<Ship, "containers" | "_count"> & {
   };
 };
 
-type ContainerRecord = Omit<Container, "ship" | "carrier" | "events"> & {
+type ContainerRecord = Omit<Container, "ship" | "carrier" | "events" | "documentWorkflow"> & {
   automation: {
     createdTick: number;
     lastStatusTick: number;
@@ -100,8 +105,8 @@ export const DEMO_SPEED_LABELS: Record<DemoSpeed, string> = {
   2: "2x Rápido",
 };
 
-const STORAGE_KEY = "portflow-demo-state-v3";
-const STATE_VERSION = 3;
+const STORAGE_KEY = "portflow-demo-state-v4";
+const STATE_VERSION = 4;
 const MINUTE_MS = 60_000;
 const CYCLE_MINUTES = 30;
 const MAX_EVENTS = 360;
@@ -224,6 +229,28 @@ const eventTitles: Record<EventType, string> = {
   STATUS_ATUALIZADO: "Atualização operacional",
 };
 
+const documentLabels: Record<ContainerDocumentType, string> = {
+  BILL_OF_LADING: "Bill of lading",
+  COMMERCIAL_INVOICE: "Commercial invoice",
+  PACKING_LIST: "Packing list",
+  IMPORT_DECLARATION: "Declaracao de importacao",
+  CUSTOMS_CLEARANCE: "Comprovante de desembaraco",
+  TRANSPORT_ORDER: "Ordem de transporte",
+  DELIVERY_APPOINTMENT: "Janela de entrega",
+  PROOF_OF_DELIVERY: "Comprovante de entrega",
+};
+
+const documentRequirements: Record<DocumentGate, ContainerDocumentType[]> = {
+  CUSTOMS_RELEASE: [
+    "BILL_OF_LADING",
+    "COMMERCIAL_INVOICE",
+    "PACKING_LIST",
+    "IMPORT_DECLARATION",
+  ],
+  DISPATCH: ["CUSTOMS_CLEARANCE", "TRANSPORT_ORDER"],
+  DELIVERY: ["DELIVERY_APPOINTMENT"],
+};
+
 declare global {
   interface Window {
     __portflowDemoEngine__?: {
@@ -320,6 +347,371 @@ function buildShipName(state: DemoState) {
   } while (state.ships.some((item) => item.name === nextName));
 
   return nextName;
+}
+
+function createDocumentId(containerId: string, type: ContainerDocumentType) {
+  return `doc-${containerId}-${type.toLowerCase()}`;
+}
+
+function getDocumentGate(container: ContainerRecord): DocumentGate | null {
+  if (
+    container.status === "NO_PORTO" ||
+    container.status === "EM_FISCALIZACAO" ||
+    (container.status === "ATRASADO" && container.automation.delayStage === "CUSTOMS")
+  ) {
+    return "CUSTOMS_RELEASE";
+  }
+
+  if (
+    container.status === "LIBERADO" ||
+    (container.status === "ATRASADO" && container.automation.delayStage === "DISPATCH")
+  ) {
+    return "DISPATCH";
+  }
+
+  if (
+    container.status === "EM_TRANSPORTE" ||
+    (container.status === "ATRASADO" && container.automation.delayStage === "DELIVERY")
+  ) {
+    return "DELIVERY";
+  }
+
+  return null;
+}
+
+function upsertRequiredStage(
+  document: ContainerDocument,
+  stage: ContainerDocumentStage,
+) {
+  if (!document.requiredFor.includes(stage)) {
+    document.requiredFor.push(stage);
+  }
+}
+
+function upsertContainerDocumentRecord(
+  state: DemoState,
+  container: ContainerRecord,
+  type: ContainerDocumentType,
+  stage: ContainerDocumentStage,
+  status: ContainerDocumentStatus,
+  notes?: string | null,
+  reviewedBy?: string | null,
+) {
+  container.documents ??= [];
+  const existing = container.documents.find((item) => item.type === type);
+
+  if (!existing) {
+    container.documents.push({
+      id: createDocumentId(container.id, type),
+      type,
+      status,
+      requiredFor: [stage],
+      label: documentLabels[type],
+      updatedAt: state.currentTime,
+      reviewedBy: reviewedBy ?? null,
+      notes: notes ?? null,
+    });
+    return;
+  }
+
+  upsertRequiredStage(existing, stage);
+  existing.status = status;
+  existing.updatedAt = state.currentTime;
+  existing.reviewedBy = reviewedBy ?? existing.reviewedBy ?? null;
+  existing.notes = notes ?? existing.notes ?? null;
+}
+
+function setContainerDocumentStatus(
+  state: DemoState,
+  container: ContainerRecord,
+  type: ContainerDocumentType,
+  status: ContainerDocumentStatus,
+  notes?: string | null,
+  reviewedBy?: string | null,
+) {
+  container.documents ??= [];
+  const existing = container.documents.find((item) => item.type === type);
+
+  if (existing) {
+    existing.status = status;
+    existing.updatedAt = state.currentTime;
+    existing.notes = notes ?? existing.notes ?? null;
+    existing.reviewedBy = reviewedBy ?? existing.reviewedBy ?? null;
+    return existing;
+  }
+
+  const gate = (Object.entries(documentRequirements) as Array<
+    [DocumentGate, ContainerDocumentType[]]
+  >).find(([, types]) => types.includes(type))?.[0] ?? "CUSTOMS_RELEASE";
+
+  const nextDocument: ContainerDocument = {
+    id: createDocumentId(container.id, type),
+    type,
+    status,
+    requiredFor: [gate],
+    label: documentLabels[type],
+    updatedAt: state.currentTime,
+    reviewedBy: reviewedBy ?? null,
+    notes: notes ?? null,
+  };
+
+  container.documents.push(nextDocument);
+  return nextDocument;
+}
+
+function ensureDocumentSet(state: DemoState, container: ContainerRecord) {
+  for (const [stage, types] of Object.entries(documentRequirements) as Array<
+    [DocumentGate, ContainerDocumentType[]]
+  >) {
+    for (const type of types) {
+      if (!container.documents?.some((item) => item.type === type)) {
+        upsertContainerDocumentRecord(
+          state,
+          container,
+          type,
+          stage,
+          "MISSING",
+          "Documento ainda nao recebido no fluxo autonomo.",
+        );
+      } else {
+        const existing = container.documents.find((item) => item.type === type);
+
+        if (existing) {
+          upsertRequiredStage(existing, stage);
+        }
+      }
+    }
+  }
+
+  if (!container.documents?.some((item) => item.type === "PROOF_OF_DELIVERY")) {
+    container.documents?.push({
+      id: createDocumentId(container.id, "PROOF_OF_DELIVERY"),
+      type: "PROOF_OF_DELIVERY",
+      status: container.status === "ENTREGUE" ? "APPROVED" : "MISSING",
+      requiredFor: [],
+      label: documentLabels.PROOF_OF_DELIVERY,
+      updatedAt: state.currentTime,
+      reviewedBy: container.status === "ENTREGUE" ? "PortFlow Autonomo" : null,
+      notes:
+        container.status === "ENTREGUE"
+          ? "Comprovante consolidado automaticamente apos entrega."
+          : "Documento gerado ao concluir a entrega.",
+    });
+  }
+}
+
+function getMissingDocumentsForGate(
+  container: ContainerRecord,
+  gate: DocumentGate,
+) {
+  const requirements = documentRequirements[gate];
+  return requirements.filter((type) => {
+    const document = container.documents?.find((item) => item.type === type);
+    return document?.status !== "APPROVED";
+  });
+}
+
+function isDocumentGateReady(container: ContainerRecord, gate: DocumentGate) {
+  return getMissingDocumentsForGate(container, gate).length === 0;
+}
+
+function getDocumentBlockingReason(container: ContainerRecord, gate: DocumentGate) {
+  const missing = getMissingDocumentsForGate(container, gate);
+
+  if (missing.length === 0) {
+    return null;
+  }
+
+  return `Pendencias em ${missing.map((type) => documentLabels[type]).join(", ")}.`;
+}
+
+function getDocumentWorkflow(container: ContainerRecord) {
+  const customsReady = isDocumentGateReady(container, "CUSTOMS_RELEASE");
+  const dispatchReady = isDocumentGateReady(container, "DISPATCH");
+  const deliveryReady = isDocumentGateReady(container, "DELIVERY");
+  const blockedStages = ([
+    ["CUSTOMS_RELEASE", customsReady],
+    ["DISPATCH", dispatchReady],
+    ["DELIVERY", deliveryReady],
+  ] as Array<[ContainerDocumentStage, boolean]>)
+    .filter(([, ready]) => !ready)
+    .map(([stage]) => stage);
+  const documents = container.documents ?? [];
+
+  return {
+    customsReady,
+    dispatchReady,
+    deliveryReady,
+    blockedStages,
+    missingDocuments: documents.filter((item) => item.status === "MISSING").length,
+    pendingDocuments: documents.filter((item) => item.status === "PENDING_REVIEW").length,
+    approvedDocuments: documents.filter((item) => item.status === "APPROVED").length,
+    blockingReason: blockedStages.length > 0
+      ? getDocumentBlockingReason(container, blockedStages[0])
+      : null,
+  };
+}
+
+function assertDocumentGateReady(container: ContainerRecord, gate: DocumentGate) {
+  const reason = getDocumentBlockingReason(container, gate);
+
+  if (!reason) {
+    return;
+  }
+
+  throw new Error(`${reason} Atualize o workflow documental para seguir com a operacao.`);
+}
+
+function applyDocumentBlock(
+  state: DemoState,
+  container: ContainerRecord,
+  gate: DocumentGate,
+) {
+  const reason = getDocumentBlockingReason(container, gate);
+
+  if (!reason) {
+    return false;
+  }
+
+  if (gate === "CUSTOMS_RELEASE" && container.status === "NO_PORTO") {
+    applyInspection(state, container);
+    container.notes = `Liberacao bloqueada por pendencia documental. ${reason}`;
+    appendEvent(
+      state,
+      container,
+      "STATUS_ATUALIZADO",
+      `Workflow documental bloqueou a liberacao. ${reason}`,
+      "Canal aduaneiro",
+    );
+    return true;
+  }
+
+  applyDelay(
+    state,
+    container,
+    gate === "CUSTOMS_RELEASE"
+      ? "CUSTOMS"
+      : gate === "DISPATCH"
+        ? "DISPATCH"
+        : "DELIVERY",
+    gate === "CUSTOMS_RELEASE"
+      ? `Retencao documental na aduana. ${reason}`
+      : gate === "DISPATCH"
+        ? `Saida bloqueada por checklist documental incompleto. ${reason}`
+        : `Entrega suspensa por pendencia documental no destino. ${reason}`,
+  );
+  return true;
+}
+
+function syncContainerDocuments(state: DemoState) {
+  for (const container of state.containers) {
+    ensureDocumentSet(state, container);
+
+    const foundationDocs: Array<[ContainerDocumentType, ContainerDocumentStatus]> = [
+      [
+        "BILL_OF_LADING",
+        container.bookingDate ? "APPROVED" : "PENDING_REVIEW",
+      ],
+      [
+        "COMMERCIAL_INVOICE",
+        container.bookingDate ? "APPROVED" : "PENDING_REVIEW",
+      ],
+      [
+        "PACKING_LIST",
+        container.bookingDate ? "APPROVED" : "PENDING_REVIEW",
+      ],
+      [
+        "IMPORT_DECLARATION",
+        container.portEntryAt || container.inspectionStartedAt || container.customsReleasedAt
+          ? "PENDING_REVIEW"
+          : "MISSING",
+      ],
+      [
+        "CUSTOMS_CLEARANCE",
+        container.customsReleasedAt ? "APPROVED" : "MISSING",
+      ],
+      [
+        "TRANSPORT_ORDER",
+        container.customsReleasedAt || container.transportStartedAt || container.deliveredAt
+          ? "PENDING_REVIEW"
+          : "MISSING",
+      ],
+      [
+        "DELIVERY_APPOINTMENT",
+        container.transportStartedAt || container.deliveredAt ? "PENDING_REVIEW" : "MISSING",
+      ],
+      [
+        "PROOF_OF_DELIVERY",
+        container.deliveredAt ? "APPROVED" : "MISSING",
+      ],
+    ];
+
+    for (const [type, minimumStatus] of foundationDocs) {
+      const existing = container.documents?.find((item) => item.type === type);
+
+      if (!existing) {
+        continue;
+      }
+
+      if (existing.status === "REJECTED") {
+        continue;
+      }
+
+      if (existing.status === "MISSING" && minimumStatus !== "MISSING") {
+        existing.status = minimumStatus;
+        existing.updatedAt = state.currentTime;
+      } else if (existing.status === "PENDING_REVIEW" && minimumStatus === "APPROVED") {
+        existing.status = "APPROVED";
+        existing.updatedAt = state.currentTime;
+        existing.reviewedBy = existing.reviewedBy ?? "PortFlow Autonomo";
+      }
+    }
+
+    const reviewCandidates = container.documents?.filter((item) =>
+      item.status === "PENDING_REVIEW" &&
+      item.type !== "PROOF_OF_DELIVERY" &&
+      (container.status !== "AGUARDANDO_NAVIO" || item.type !== "IMPORT_DECLARATION"),
+    ) ?? [];
+
+    for (const document of reviewCandidates) {
+      if (nextRandom(state) <= 0.16) {
+        document.status = "APPROVED";
+        document.updatedAt = state.currentTime;
+        document.reviewedBy = document.reviewedBy ?? "PortFlow Autonomo";
+        document.notes = "Validacao automatica concluida no fluxo operacional.";
+      }
+    }
+
+    if (container.transportStartedAt) {
+      setContainerDocumentStatus(
+        state,
+        container,
+        "TRANSPORT_ORDER",
+        "APPROVED",
+        "Coleta confirmada e ordem de transporte validada.",
+        "PortFlow Autonomo",
+      );
+      setContainerDocumentStatus(
+        state,
+        container,
+        "DELIVERY_APPOINTMENT",
+        "APPROVED",
+        "Janela de recebimento confirmada para o destino final.",
+        "PortFlow Autonomo",
+      );
+    }
+
+    if (container.deliveredAt) {
+      setContainerDocumentStatus(
+        state,
+        container,
+        "PROOF_OF_DELIVERY",
+        "APPROVED",
+        "Comprovante consolidado automaticamente apos aceite do destinatario.",
+        "PortFlow Autonomo",
+      );
+    }
+  }
 }
 
 function stripShip(record: ShipRecord): Ship {
@@ -420,6 +812,7 @@ function toContainerReference(state: DemoState, container: ContainerRecord): Con
 
   return {
     ...base,
+    documentWorkflow: getDocumentWorkflow(container),
     ship: toShipReference(state, container.shipId),
     carrier: toCarrierReference(state, container.carrierId),
     events,
@@ -1066,15 +1459,18 @@ function buildInitialState() {
   };
 
   for (const container of state.containers) {
+    ensureDocumentSet(state, container);
     ensureContainerEvents(state, container);
   }
 
+  syncContainerDocuments(state);
   normalizeCarrierStatuses(state);
 
   return state;
 }
 
 function persistState(state: DemoState) {
+  syncContainerDocuments(state);
   syncOperationalOccurrences(state);
   state.lastEngineAt = new Date().toISOString();
 
@@ -1178,6 +1574,16 @@ function findContainerRecord(state: DemoState, containerId: string) {
   }
 
   return container;
+}
+
+function findDocumentRecord(container: ContainerRecord, documentId: string) {
+  const document = container.documents?.find((item) => item.id === documentId);
+
+  if (!document) {
+    throw new Error("Documento nao encontrado.");
+  }
+
+  return document;
 }
 
 function findShipRecord(state: DemoState, shipId: string) {
@@ -1299,6 +1705,52 @@ function syncOperationalOccurrences(state: DemoState) {
       sourceLabel: ship.name,
       slaDeadlineAt: addHours(state.currentTime, severity === "CRITICAL" ? 1 : 2),
       recommendedAction: "Replanejar janela de atracacao e comunicar clientes impactados.",
+      ownerName: state.occurrences.find((item) => item.id === id)?.ownerName ?? null,
+      notes: state.occurrences.find((item) => item.id === id)?.notes ?? null,
+    });
+  }
+
+  for (const container of state.containers) {
+    const gate = getDocumentGate(container);
+
+    if (!gate || isDocumentGateReady(container, gate)) {
+      continue;
+    }
+
+    const missing = getMissingDocumentsForGate(container, gate);
+    const reason = getDocumentBlockingReason(container, gate);
+    const id = buildOccurrenceId(
+      "CONTAINER",
+      "DOCUMENT_REVIEW",
+      `${container.id}-${gate.toLowerCase()}`,
+    );
+    const severity: OccurrenceSeverity =
+      gate === "CUSTOMS_RELEASE" ? "CRITICAL" : gate === "DISPATCH" ? "HIGH" : "MEDIUM";
+
+    desiredIds.add(id);
+    upsertOccurrenceRecord(state, {
+      id,
+      title:
+        gate === "CUSTOMS_RELEASE"
+          ? `Liberacao bloqueada: ${container.containerCode}`
+          : gate === "DISPATCH"
+            ? `Expedicao bloqueada: ${container.containerCode}`
+            : `Entrega pendente de documentos: ${container.containerCode}`,
+      description:
+        `${reason ?? "Pendencias documentais ativas."} ` +
+        `Itens criticos: ${missing.map((type) => documentLabels[type]).join(", ")}.`,
+      category: "DOCUMENT_REVIEW",
+      severity,
+      sourceType: "CONTAINER",
+      sourceId: container.id,
+      sourceLabel: container.containerCode,
+      slaDeadlineAt: addHours(state.currentTime, gate === "CUSTOMS_RELEASE" ? 1 : 2),
+      recommendedAction:
+        gate === "CUSTOMS_RELEASE"
+          ? "Conferir pacote aduaneiro e validar documentos base da importacao."
+          : gate === "DISPATCH"
+            ? "Regularizar ordem de transporte e comprovante de desembaraco."
+            : "Confirmar janela de recebimento antes do fechamento da entrega.",
       ownerName: state.occurrences.find((item) => item.id === id)?.ownerName ?? null,
       notes: state.occurrences.find((item) => item.id === id)?.notes ?? null,
     });
@@ -1458,8 +1910,25 @@ function applyInspection(state: DemoState, container: ContainerRecord) {
 }
 
 function applyCustomsRelease(state: DemoState, container: ContainerRecord) {
+  assertDocumentGateReady(container, "CUSTOMS_RELEASE");
   setContainerStatus(state, container, "LIBERADO", 1);
   container.customsReleasedAt = state.currentTime;
+  setContainerDocumentStatus(
+    state,
+    container,
+    "CUSTOMS_CLEARANCE",
+    "APPROVED",
+    "Desembaraco registrado para retirada do terminal.",
+    "Receita Federal",
+  );
+  setContainerDocumentStatus(
+    state,
+    container,
+    "TRANSPORT_ORDER",
+    "PENDING_REVIEW",
+    "Transportadora aguardando confirmacao final de coleta.",
+    "Mesa operacional",
+  );
   container.notes = "Liberação aduaneira concluída e apta para programação rodoviária.";
   appendEvent(
     state,
@@ -1471,12 +1940,29 @@ function applyCustomsRelease(state: DemoState, container: ContainerRecord) {
 }
 
 function applyDispatch(state: DemoState, container: ContainerRecord) {
+  assertDocumentGateReady(container, "DISPATCH");
   if (!container.carrierId) {
     container.carrierId = pickCarrier(state)?.id ?? null;
   }
 
   setContainerStatus(state, container, "EM_TRANSPORTE", randomInt(state, 1, 2));
   container.transportStartedAt = state.currentTime;
+  setContainerDocumentStatus(
+    state,
+    container,
+    "TRANSPORT_ORDER",
+    "APPROVED",
+    "Ordem de transporte validada e coleta iniciada.",
+    "PortFlow Autonomo",
+  );
+  setContainerDocumentStatus(
+    state,
+    container,
+    "DELIVERY_APPOINTMENT",
+    "PENDING_REVIEW",
+    "Janela de descarga enviada para confirmacao do destinatario.",
+    "Customer service",
+  );
   container.notes = "Carga expedida e monitorada em trânsito rodoviário.";
   appendEvent(
     state,
@@ -1488,8 +1974,17 @@ function applyDispatch(state: DemoState, container: ContainerRecord) {
 }
 
 function applyDelivery(state: DemoState, container: ContainerRecord) {
+  assertDocumentGateReady(container, "DELIVERY");
   setContainerStatus(state, container, "ENTREGUE", 0);
   container.deliveredAt = state.currentTime;
+  setContainerDocumentStatus(
+    state,
+    container,
+    "PROOF_OF_DELIVERY",
+    "APPROVED",
+    "Comprovante de entrega consolidado com aceite do destinatario.",
+    "Destinatario final",
+  );
   container.notes = "Entrega concluída com aceite do destinatário.";
   appendEvent(
     state,
@@ -1591,6 +2086,7 @@ function maybeSpawnOperation(state: DemoState) {
     };
 
     state.containers.unshift(container);
+    ensureDocumentSet(state, container);
     ensureContainerEvents(state, container);
   }
 }
@@ -1681,6 +2177,9 @@ function processContainers(state: DemoState) {
       container.automation.delayStage === "CUSTOMS" &&
       nextRandom(state) > profile.customsDelayChance / 2
     ) {
+      if (applyDocumentBlock(state, container, "CUSTOMS_RELEASE")) {
+        continue;
+      }
       applyCustomsRelease(state, container);
       continue;
     }
@@ -1690,6 +2189,9 @@ function processContainers(state: DemoState) {
       container.automation.delayStage === "DISPATCH" &&
       nextRandom(state) <= profile.dispatchChance
     ) {
+      if (applyDocumentBlock(state, container, "DISPATCH")) {
+        continue;
+      }
       applyDispatch(state, container);
       continue;
     }
@@ -1699,11 +2201,19 @@ function processContainers(state: DemoState) {
       container.automation.delayStage === "DELIVERY" &&
       nextRandom(state) <= profile.deliveryChance
     ) {
+      if (applyDocumentBlock(state, container, "DELIVERY")) {
+        continue;
+      }
       applyDelivery(state, container);
       continue;
     }
 
     if (container.status === "NO_PORTO") {
+      if (!isDocumentGateReady(container, "CUSTOMS_RELEASE")) {
+        applyDocumentBlock(state, container, "CUSTOMS_RELEASE");
+        continue;
+      }
+
       if (nextRandom(state) <= profile.inspectionChance) {
         applyInspection(state, container);
       } else {
@@ -1713,6 +2223,11 @@ function processContainers(state: DemoState) {
     }
 
     if (container.status === "EM_FISCALIZACAO") {
+      if (!isDocumentGateReady(container, "CUSTOMS_RELEASE")) {
+        applyDocumentBlock(state, container, "CUSTOMS_RELEASE");
+        continue;
+      }
+
       if (nextRandom(state) <= profile.customsDelayChance) {
         applyDelay(
           state,
@@ -1727,6 +2242,11 @@ function processContainers(state: DemoState) {
     }
 
     if (container.status === "LIBERADO") {
+      if (!isDocumentGateReady(container, "DISPATCH")) {
+        applyDocumentBlock(state, container, "DISPATCH");
+        continue;
+      }
+
       if (nextRandom(state) <= profile.dispatchChance) {
         applyDispatch(state, container);
       } else if (nextRandom(state) <= profile.customsDelayChance) {
@@ -1741,6 +2261,11 @@ function processContainers(state: DemoState) {
     }
 
     if (container.status === "EM_TRANSPORTE") {
+      if (!isDocumentGateReady(container, "DELIVERY")) {
+        applyDocumentBlock(state, container, "DELIVERY");
+        continue;
+      }
+
       if (nextRandom(state) <= profile.deliveryChance) {
         applyDelivery(state, container);
       } else if (nextRandom(state) <= profile.customsDelayChance) {
@@ -2076,6 +2601,7 @@ export function createDemoContainer(payload: ContainerPayload) {
     };
 
     state.containers.unshift(container);
+    ensureDocumentSet(state, container);
     ensureContainerEvents(state, container);
     normalizeCarrierStatuses(state);
 
@@ -2097,8 +2623,51 @@ export function updateDemoContainer(
     });
 
     container.automation.lastStatusTick = state.tick;
+    ensureDocumentSet(state, container);
     ensureContainerEvents(state, container);
     normalizeCarrierStatuses(state);
+
+    return toContainerReference(state, container);
+  });
+}
+
+export function upsertDemoContainerDocument(
+  containerId: string,
+  type: ContainerDocumentType,
+  stage: ContainerDocumentStage,
+  status: ContainerDocumentStatus,
+  reviewedBy?: string,
+) {
+  return updateState((state) => {
+    const container = findContainerRecord(state, containerId);
+    upsertContainerDocumentRecord(
+      state,
+      container,
+      type,
+      stage,
+      status,
+      "Documento atualizado manualmente pela mesa operacional.",
+      reviewedBy ?? "Mesa operacional",
+    );
+
+    return toContainerReference(state, container);
+  });
+}
+
+export function updateDemoContainerDocument(
+  containerId: string,
+  documentId: string,
+  status: ContainerDocumentStatus,
+  notes?: string,
+  reviewedBy?: string,
+) {
+  return updateState((state) => {
+    const container = findContainerRecord(state, containerId);
+    const document = findDocumentRecord(container, documentId);
+    document.status = status;
+    document.updatedAt = state.currentTime;
+    document.notes = notes ?? document.notes ?? null;
+    document.reviewedBy = reviewedBy ?? document.reviewedBy ?? "Mesa operacional";
 
     return toContainerReference(state, container);
   });
