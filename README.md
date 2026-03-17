@@ -160,6 +160,20 @@ Observacoes:
 - o modo recomendado para GitHub Pages e `NEXT_PUBLIC_RUNTIME_MODE=demo`
 - o estado da operacao e persistido no navegador via `localStorage`
 - a tela de detalhe do conteiner usa rota estatica com query string para evitar problemas de refresh em hospedagem estatica
+- o workflow de deploy automatico esta em [deploy-pages.yml](./.github/workflows/deploy-pages.yml)
+
+URL esperada do Pages deste repositorio:
+
+- `https://levoratoo.github.io/logistica-inteligente/`
+
+Se o primeiro deploy nao publicar automaticamente, habilite uma unica vez em:
+
+1. `Settings`
+2. `Pages`
+3. `Build and deployment`
+4. `Source: GitHub Actions`
+
+Depois disso, cada push em `main` publica a nova versao automaticamente.
 
 ## Subindo com Docker
 
