@@ -18,6 +18,7 @@ O sistema simula o fluxo operacional de importacao:
 - Torre de controle operacional com fila de acao, SLAs e priorizacao do turno
 - Mapa de patio e programacao de docas com ocupacao por zona e berco
 - Workflow documental por conteiner com bloqueio operacional por etapa
+- Portal do cliente com acesso externo filtrado por conta
 - CRUD completo de conteineres, navios e transportadoras
 - Central de ocorrencias operacionais com triagem e resolucao
 - Timeline por conteiner e tracking por codigo
@@ -40,6 +41,11 @@ NEXT_PUBLIC_RUNTIME_MODE=demo
 NEXT_PUBLIC_API_URL=http://localhost:4000/api
 NEXT_PUBLIC_BASE_PATH=
 ```
+
+## Acessos demonstrativos
+
+- Empresa: `ops@portflow.io` / `portflow123`
+- Cliente Braskem: `cliente.braskem@portflow.io` / `braskem123`
 
 ## Stack
 

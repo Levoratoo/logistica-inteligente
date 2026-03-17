@@ -76,6 +76,8 @@ export default function ContainerDetailsPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-overview-occurrences"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-overview-topbar"] });
       queryClient.invalidateQueries({ queryKey: ["control-tower-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["client-portal-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["client-portal-topbar"] });
       queryClient.invalidateQueries({ queryKey: ["simulation-runtime"] });
       queryClient.invalidateQueries({ queryKey: ["simulation-runtime-topbar"] });
       queryClient.invalidateQueries({ queryKey: ["simulation-containers"] });
@@ -84,6 +86,7 @@ export default function ContainerDetailsPage() {
   });
 
   const containerItem = containerQuery.data;
+  const isClientView = user?.accountType === "CLIENT";
 
   if (!containerId) {
     return (
@@ -105,6 +108,21 @@ export default function ContainerDetailsPage() {
     );
   }
 
+  if (isClientView && containerItem.clientName !== user?.clientName) {
+    return (
+      <Card>
+        <CardContent className="grid gap-4 p-8 text-sm text-muted-foreground">
+          <p>Este conteiner nao pertence a conta autenticada.</p>
+          <div>
+            <Button asChild variant="outline">
+              <Link href="/client-portal">Voltar ao portal do cliente</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const documents = containerItem.documents ?? [];
   const workflow = containerItem.documentWorkflow;
 
@@ -113,15 +131,27 @@ export default function ContainerDetailsPage() {
       <PageHeader
         eyebrow="Detalhe operacional"
         title={containerItem.containerCode}
-        description="Visao consolidada de vinculos, datas criticas, workflow documental e historico operacional da unidade."
+        description={
+          isClientView
+            ? "Visao do cliente com marcos logísticos, status documental e progresso da sua carga."
+            : "Visao consolidada de vinculos, datas criticas, workflow documental e historico operacional da unidade."
+        }
         actions={(
           <>
-            <Button asChild variant="outline">
-              <Link href="/control-tower">Abrir Torre de Controle</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/simulation">Abrir Simulation Center</Link>
-            </Button>
+            {isClientView ? (
+              <Button asChild variant="outline">
+                <Link href="/client-portal">Voltar ao meu portal</Link>
+              </Button>
+            ) : (
+              <>
+                <Button asChild variant="outline">
+                  <Link href="/control-tower">Abrir Torre de Controle</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/simulation">Abrir Simulation Center</Link>
+                </Button>
+              </>
+            )}
           </>
         )}
       />
@@ -198,7 +228,9 @@ export default function ContainerDetailsPage() {
             <CardHeader>
               <CardTitle>Workflow documental</CardTitle>
               <p className="text-sm text-muted-foreground">
-                O checklist abaixo interfere diretamente na liberacao, expedicao e entrega.
+                {isClientView
+                  ? "Checklist documental acompanhado pela equipe PortFlow para manter sua carga em fluxo."
+                  : "O checklist abaixo interfere diretamente na liberacao, expedicao e entrega."}
               </p>
             </CardHeader>
             <CardContent className="grid gap-5">
@@ -238,6 +270,7 @@ export default function ContainerDetailsPage() {
                     container={containerItem}
                     document={document}
                     pending={documentMutation.isPending}
+                    readonly={isClientView}
                     onChange={(status, notes) =>
                       documentMutation.mutate({
                         documentId: document.id,
@@ -332,11 +365,13 @@ function DocumentRow({
   container,
   document,
   pending,
+  readonly,
   onChange,
 }: {
   container: Container;
   document: ContainerDocument;
   pending: boolean;
+  readonly?: boolean;
   onChange: (status: ContainerDocumentStatus, notes: string) => void;
 }) {
   return (
@@ -367,46 +402,54 @@ function DocumentRow({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 xl:w-[228px]">
-          <Button
-            variant="outline"
-            disabled={pending || document.status === "PENDING_REVIEW"}
-            onClick={() =>
-              onChange(
-                "PENDING_REVIEW",
-                "Documento recebido e encaminhado para conferencia.",
-              )
-            }
-          >
-            <ScanSearch className="size-4" />
-            Receber
-          </Button>
-          <Button
-            disabled={pending || document.status === "APPROVED"}
-            onClick={() =>
-              onChange(
-                "APPROVED",
-                "Documento aprovado manualmente pela mesa operacional.",
-              )
-            }
-          >
-            <FileCheck2 className="size-4" />
-            Aprovar
-          </Button>
-          <Button
-            variant="outline"
-            disabled={pending || document.status === "REJECTED"}
-            onClick={() =>
-              onChange(
-                "REJECTED",
-                "Documento devolvido para ajuste ou complemento.",
-              )
-            }
-          >
-            <FileWarning className="size-4" />
-            Rejeitar
-          </Button>
-        </div>
+        {readonly ? (
+          <div className="xl:w-[228px]">
+            <div className="rounded-2xl border border-dashed border-border bg-secondary/30 px-4 py-4 text-sm text-muted-foreground">
+              Acompanhamento somente leitura para o cliente.
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 xl:w-[228px]">
+            <Button
+              variant="outline"
+              disabled={pending || document.status === "PENDING_REVIEW"}
+              onClick={() =>
+                onChange(
+                  "PENDING_REVIEW",
+                  "Documento recebido e encaminhado para conferencia.",
+                )
+              }
+            >
+              <ScanSearch className="size-4" />
+              Receber
+            </Button>
+            <Button
+              disabled={pending || document.status === "APPROVED"}
+              onClick={() =>
+                onChange(
+                  "APPROVED",
+                  "Documento aprovado manualmente pela mesa operacional.",
+                )
+              }
+            >
+              <FileCheck2 className="size-4" />
+              Aprovar
+            </Button>
+            <Button
+              variant="outline"
+              disabled={pending || document.status === "REJECTED"}
+              onClick={() =>
+                onChange(
+                  "REJECTED",
+                  "Documento devolvido para ajuste ou complemento.",
+                )
+              }
+            >
+              <FileWarning className="size-4" />
+              Rejeitar
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -2,15 +2,29 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Anchor, ArrowRight, Container, ShieldCheck, Ship } from "lucide-react";
+import {
+  Anchor,
+  ArrowRight,
+  Building2,
+  Container,
+  ShieldCheck,
+  Ship,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { demoCredentials } from "@/lib/auth";
+import {
+  demoAccessProfiles,
+  resolveAuthorizedPath,
+  type DemoAccessProfile,
+} from "@/lib/auth";
 import { useAuth } from "@/components/app/auth-provider";
 import { getErrorMessage } from "@/services/api-client";
+
+const defaultProfile = demoAccessProfiles[0];
 
 export default function LoginPage() {
   return (
@@ -23,25 +37,36 @@ export default function LoginPage() {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isAuthenticated, login } = useAuth();
-  const [email, setEmail] = useState(demoCredentials.email);
-  const [password, setPassword] = useState(demoCredentials.password);
+  const { isAuthenticated, login, user } = useAuth();
+  const [selectedProfileId, setSelectedProfileId] = useState(defaultProfile.id);
+  const [email, setEmail] = useState(defaultProfile.email);
+  const [password, setPassword] = useState(defaultProfile.password);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      router.replace(searchParams.get("next") || "/dashboard");
+    if (isAuthenticated && user) {
+      router.replace(resolveAuthorizedPath(user, searchParams.get("next")));
     }
-  }, [isAuthenticated, router, searchParams]);
+  }, [isAuthenticated, router, searchParams, user]);
+
+  function applyProfile(profile: DemoAccessProfile) {
+    setSelectedProfileId(profile.id);
+    setEmail(profile.email);
+    setPassword(profile.password);
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
 
     try {
-      await login(email, password);
-      toast.success("Ambiente PortFlow liberado.");
-      router.replace(searchParams.get("next") || "/dashboard");
+      const nextUser = await login(email, password);
+      toast.success(
+        nextUser.accountType === "CLIENT"
+          ? "Portal do cliente liberado."
+          : "Ambiente PortFlow liberado.",
+      );
+      router.replace(resolveAuthorizedPath(nextUser, searchParams.get("next")));
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -60,10 +85,10 @@ function LoginContent() {
             </span>
             <div className="space-y-4">
               <h1 className="font-display text-5xl font-semibold tracking-tight text-foreground">
-                Controle portuário com visão operacional de ponta a ponta.
+                Operacao portuaria para a empresa e visibilidade sob medida para o cliente.
               </h1>
               <p className="max-w-xl text-lg leading-8 text-muted-foreground">
-                Plataforma de gestão logística para pátio portuário, fiscalização aduaneira, expedição rodoviária e entrega final.
+                Entre como equipe PortFlow para operar patio, docas e documentos, ou use o perfil de cliente para acompanhar apenas as cargas da sua conta.
               </p>
             </div>
           </div>
@@ -72,24 +97,24 @@ function LoginContent() {
             <FeatureCard
               icon={Ship}
               title="Escalas e ETA"
-              text="Acompanhe navios previstos, atracação e descarga em tempo real."
+              text="Acompanhe navios previstos, atracacao, descarga e pressao no terminal."
             />
             <FeatureCard
               icon={Container}
-              title="Contêineres"
-              text="Monitore status, vínculos, histórico e gargalos operacionais."
+              title="Fluxo do conteiner"
+              text="Visualize documentos, bloqueios operacionais e marcos de entrega."
             />
             <FeatureCard
               icon={ShieldCheck}
-              title="Compliance"
-              text="Simule liberação alfandegária e transição segura entre etapas."
+              title="Dois perfis"
+              text="Empresa com controle completo e cliente com portal externo filtrado."
             />
           </div>
         </div>
       </section>
 
       <section className="flex items-center justify-center px-4 py-10">
-        <Card className="w-full max-w-xl bg-white/92">
+        <Card className="w-full max-w-2xl bg-white/92">
           <CardContent className="grid gap-8 p-8 sm:p-10">
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -99,14 +124,50 @@ function LoginContent() {
                 <div>
                   <p className="font-display text-2xl font-semibold">Acessar PortFlow</p>
                   <p className="text-sm text-muted-foreground">
-                    Ambiente demonstrativo para gestão logística portuária.
+                    Escolha um dos acessos demonstrativos abaixo.
                   </p>
                 </div>
               </div>
-              <div className="rounded-2xl border border-primary/10 bg-primary/6 p-4 text-sm text-muted-foreground">
-                Use <strong>{demoCredentials.email}</strong> e{" "}
-                <strong>{demoCredentials.password}</strong>.
-              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {demoAccessProfiles.map((profile) => (
+                <button
+                  key={profile.id}
+                  type="button"
+                  onClick={() => applyProfile(profile)}
+                  className={[
+                    "rounded-[28px] border p-5 text-left transition",
+                    selectedProfileId === profile.id
+                      ? "border-primary bg-primary/6 shadow-lg shadow-primary/10"
+                      : "border-border bg-white/75 hover:border-primary/25 hover:bg-white",
+                  ].join(" ")}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-display text-xl font-semibold">{profile.label}</p>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        {profile.description}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-secondary/70 p-3 text-primary">
+                      {profile.user.accountType === "COMPANY" ? (
+                        <Building2 className="size-5" />
+                      ) : (
+                        <UserRound className="size-5" />
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-1 text-sm">
+                    <span>
+                      <strong>Email:</strong> {profile.email}
+                    </span>
+                    <span>
+                      <strong>Senha:</strong> {profile.password}
+                    </span>
+                  </div>
+                </button>
+              ))}
             </div>
 
             <form className="grid gap-5" onSubmit={handleSubmit}>
@@ -129,7 +190,7 @@ function LoginContent() {
                 />
               </div>
               <Button className="mt-2" size="lg" type="submit" disabled={submitting}>
-                {submitting ? "Entrando..." : "Entrar no controle operacional"}
+                {submitting ? "Entrando..." : "Entrar no PortFlow"}
                 <ArrowRight className="size-4" />
               </Button>
             </form>

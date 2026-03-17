@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { DEMO_SCENARIO_LABELS } from "@/lib/demo-runtime";
 import { formatDateTime } from "@/lib/formatters";
 import { getDashboardOverview } from "@/services/dashboard-service";
+import { getClientPortalOverview } from "@/services/client-portal-service";
 import { getSimulationRuntime } from "@/services/simulations-service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,29 +15,45 @@ import { useAuth } from "./auth-provider";
 export function Topbar() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { data } = useQuery({
+  const dashboardQuery = useQuery({
     queryKey: ["dashboard-overview-topbar"],
     queryFn: getDashboardOverview,
+    enabled: user?.accountType === "COMPANY",
+  });
+  const clientPortalQuery = useQuery({
+    queryKey: ["client-portal-topbar", user?.clientName],
+    queryFn: () => getClientPortalOverview(user?.clientName ?? ""),
+    enabled: user?.accountType === "CLIENT" && Boolean(user.clientName),
   });
   const runtimeQuery = useQuery({
     queryKey: ["simulation-runtime-topbar"],
     queryFn: getSimulationRuntime,
   });
 
+  const headline = user?.accountType === "CLIENT"
+    ? "Sua cadeia logistica em acompanhamento"
+    : "Operacao de Santos em monitoramento autonomo";
+  const helper = user?.accountType === "CLIENT"
+    ? clientPortalQuery.data
+      ? `${clientPortalQuery.data.kpis.activeContainers} cargas ativas, ${clientPortalQuery.data.kpis.pendingDocuments} pendencias documentais e ${clientPortalQuery.data.kpis.openOccurrences} ocorrencias abertas na sua conta.`
+      : "Sincronizando cargas e documentos da sua conta."
+    : dashboardQuery.data
+      ? `${dashboardQuery.data.kpis.containersInPort} conteineres no porto, ${dashboardQuery.data.kpis.containersInTransport} em transito e ${dashboardQuery.data.kpis.openOccurrences} ocorrencias abertas.`
+      : "Sincronizando indicadores da operacao.";
+  const searchPlaceholder = user?.accountType === "CLIENT"
+    ? "Buscar minhas cargas por codigo ou destino"
+    : "Busca rapida por cliente, carga ou codigo";
+
   return (
     <div className="page-fade flex flex-col gap-4 rounded-[30px] border border-white/80 bg-white/90 p-5 soft-shadow lg:flex-row lg:items-center lg:justify-between">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
         <div className="flex items-center gap-3 rounded-2xl bg-secondary/60 px-4 py-3 text-sm text-muted-foreground">
           <Waves className="size-4 text-primary" />
-          Operacao de Santos em monitoramento autonomo
+          {headline}
         </div>
         <div className="grid gap-1">
-          <p className="font-display text-xl font-semibold">Boa operacao, {user?.name}</p>
-          <p className="text-sm text-muted-foreground">
-            {data
-              ? `${data.kpis.containersInPort} conteineres no porto, ${data.kpis.containersInTransport} em transito e ${data.kpis.openOccurrences} ocorrencias abertas.`
-              : "Sincronizando indicadores da operacao."}
-          </p>
+          <p className="font-display text-xl font-semibold">Boas-vindas, {user?.name}</p>
+          <p className="text-sm text-muted-foreground">{helper}</p>
         </div>
       </div>
 
@@ -51,7 +68,7 @@ export function Topbar() {
         ) : null}
         <div className="relative min-w-72">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-10" placeholder="Busca rapida por cliente, carga ou codigo" />
+          <Input className="pl-10" placeholder={searchPlaceholder} />
         </div>
         <Button variant="ghost" size="icon" aria-label="Notificacoes">
           <Bell className="size-4" />

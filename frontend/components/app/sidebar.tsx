@@ -9,13 +9,15 @@ import {
   Building2,
   Container,
   Crosshair,
+  LayoutPanelTop,
   Map,
   Radar,
   ShipWheel,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "./auth-provider";
 
-const navigation = [
+const companyNavigation = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/control-tower", label: "Torre de Controle", icon: Crosshair },
   { href: "/yard-operations", label: "Patio e Docas", icon: Map },
@@ -27,8 +29,14 @@ const navigation = [
   { href: "/simulation", label: "Simulation Center", icon: Boxes },
 ];
 
+const clientNavigation = [
+  { href: "/client-portal", label: "Meu Portal", icon: LayoutPanelTop },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const navigation = user?.accountType === "CLIENT" ? clientNavigation : companyNavigation;
 
   return (
     <aside className="grid gap-8 rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,#0b1f33_0%,#0d2a45_45%,#123956_100%)] p-6 text-sidebar-foreground soft-shadow lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
@@ -39,12 +47,15 @@ export function Sidebar() {
           </div>
           <div>
             <p className="font-display text-xl font-semibold">PortFlow</p>
-            <p className="text-sm text-white/60">Port Ops Control</p>
+            <p className="text-sm text-white/60">
+              {user?.accountType === "CLIENT" ? "Client View" : "Port Ops Control"}
+            </p>
           </div>
         </div>
         <div className="rounded-3xl border border-white/10 bg-white/6 p-4 text-sm leading-6 text-white/75">
-          Operacao ponta a ponta para patio portuario, fiscalizacao, transporte,
-          ocorrencias e entrega final.
+          {user?.accountType === "CLIENT"
+            ? "Portal externo com cargas, marcos e documentos filtrados para a sua conta."
+            : "Operacao ponta a ponta para patio portuario, fiscalizacao, transporte, ocorrencias e entrega final."}
         </div>
       </div>
 
@@ -70,9 +81,13 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-auto rounded-3xl border border-accent/20 bg-accent/12 p-4 text-sm text-white/80">
-        <p className="font-semibold text-white">Ambiente demonstrativo</p>
+        <p className="font-semibold text-white">
+          {user?.accountType === "CLIENT" ? "Acesso demonstrativo do cliente" : "Ambiente demonstrativo"}
+        </p>
         <p className="mt-1 text-white/70">
-          Dados mockados com fluxo autonomo, patio vivo, torre de controle e compatibilidade com GitHub Pages.
+          {user?.accountType === "CLIENT"
+            ? "Dados mockados filtrados por conta, persistidos localmente e compativeis com GitHub Pages."
+            : "Dados mockados com fluxo autonomo, patio vivo, torre de controle e compatibilidade com GitHub Pages."}
         </p>
       </div>
     </aside>

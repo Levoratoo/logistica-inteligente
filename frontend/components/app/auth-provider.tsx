@@ -9,7 +9,7 @@ import {
 } from "react";
 import {
   clearSession,
-  demoCredentials,
+  findDemoAccessProfile,
   persistSession,
   readSession,
   type SessionUser,
@@ -19,7 +19,7 @@ type AuthContextValue = {
   user: SessionUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<SessionUser>;
   logout: () => void;
 };
 
@@ -36,21 +36,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function login(email: string, password: string) {
-    if (
-      email.trim().toLowerCase() !== demoCredentials.email ||
-      password !== demoCredentials.password
-    ) {
-      throw new Error("Credenciais invalidas. Use o acesso de demonstracao.");
+    const profile = findDemoAccessProfile(email, password);
+
+    if (!profile) {
+      throw new Error("Credenciais invalidas. Use um dos acessos demonstrativos.");
     }
 
-    const nextUser = {
-      email: demoCredentials.email,
-      name: "Pedro Operacoes",
-      role: "Logistics Manager",
-    } satisfies SessionUser;
-
-    persistSession(nextUser);
-    setUser(nextUser);
+    persistSession(profile.user);
+    setUser(profile.user);
+    return profile.user;
   }
 
   function logout() {

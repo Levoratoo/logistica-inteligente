@@ -339,6 +339,23 @@ export type YardOperationsOverview = {
   hotspots: YardHotspot[];
 };
 
+export type ClientPortalOverview = {
+  clientName: string;
+  currentTime: string;
+  kpis: {
+    activeContainers: number;
+    inTransit: number;
+    delivered: number;
+    pendingDocuments: number;
+    openOccurrences: number;
+  };
+  shipments: Container[];
+  upcomingDeliveries: Container[];
+  documentAlerts: Container[];
+  recentMilestones: EventLog[];
+  openIssues: OperationalOccurrence[];
+};
+
 export type ContainerPayload = {
   containerCode: string;
   type: ContainerType;

@@ -2,14 +2,14 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { readSession } from "@/lib/auth";
+import { getSessionHomePath, readSession } from "@/lib/auth";
 
 export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
     const session = readSession();
-    router.replace(session ? "/dashboard" : "/login");
+    router.replace(session ? getSessionHomePath(session) : "/login");
   }, [router]);
 
   return <div className="min-h-screen" />;
