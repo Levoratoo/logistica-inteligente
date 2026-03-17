@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Anchor,
   ArrowRight,
@@ -27,27 +27,24 @@ import { getErrorMessage } from "@/services/api-client";
 const defaultProfile = demoAccessProfiles[0];
 
 export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen" />}>
-      <LoginContent />
-    </Suspense>
-  );
-}
-
-function LoginContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { isAuthenticated, login, user } = useAuth();
   const [selectedProfileId, setSelectedProfileId] = useState(defaultProfile.id);
   const [email, setEmail] = useState(defaultProfile.email);
   const [password, setPassword] = useState(defaultProfile.password);
   const [submitting, setSubmitting] = useState(false);
+  const [requestedPath, setRequestedPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setRequestedPath(params.get("next"));
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      router.replace(resolveAuthorizedPath(user, searchParams.get("next")));
+      router.replace(resolveAuthorizedPath(user, requestedPath));
     }
-  }, [isAuthenticated, router, searchParams, user]);
+  }, [isAuthenticated, requestedPath, router, user]);
 
   function applyProfile(profile: DemoAccessProfile) {
     setSelectedProfileId(profile.id);
@@ -66,7 +63,7 @@ function LoginContent() {
           ? "Portal do cliente liberado."
           : "Ambiente PortFlow liberado.",
       );
-      router.replace(resolveAuthorizedPath(nextUser, searchParams.get("next")));
+      router.replace(resolveAuthorizedPath(nextUser, requestedPath));
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
